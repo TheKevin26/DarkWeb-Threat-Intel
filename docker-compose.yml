@@ -1,0 +1,67 @@
+# Full stack: API + dashboard, Celery worker/beat, Tor, Postgres, Redis, OpenSearch.
+#   docker compose up -d --build
+#   docker compose exec api onionlens demo      # load the synthetic dataset
+#   open http://localhost:8000
+
+x-app: &app
+  build: .
+  environment:
+    ONIONLENS_DATABASE_URL: postgresql+psycopg://onionlens:onionlens@postgres:5432/onionlens
+    ONIONLENS_REDIS_URL: redis://redis:6379/0
+    ONIONLENS_OPENSEARCH_URL: http://opensearch:9200
+    ONIONLENS_TOR_PROXY: socks5://tor:9050
+    ONIONLENS_RAW_DIR: /app/data/raw
+    ONIONLENS_API_KEY: ${ONIONLENS_API_KEY:-}
+  volumes:
+    - rawdata:/app/data
+    - ./config:/app/config:ro
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+    opensearch: { condition: service_started }
+    tor: { condition: service_started }
+
+services:
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+
+  worker:
+    <<: *app
+    command: celery -A onionlens.tasks worker -l info --concurrency 2
+
+  beat:
+    <<: *app
+    command: celery -A onionlens.tasks beat -l info -s /app/data/celerybeat-schedule
+
+  tor:
+    build: ./docker/tor
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: onionlens
+      POSTGRES_PASSWORD: onionlens
+      POSTGRES_DB: onionlens
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onionlens"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes: [osdata:/usr/share/opensearch/data]
+
+volumes:
+  pgdata:
+  osdata:
+  rawdata:

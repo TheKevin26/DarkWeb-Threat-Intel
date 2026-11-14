@@ -1,0 +1,21 @@
+# Assets to monitor. Loaded into the database by `onionlens init` / any collection run, and editable
+# from the dashboard. Entries can be a plain string (severity "high") or {value, severity}.
+
+domains:
+  - value: acme-industries.example
+    severity: high
+
+email_domains: []
+
+keywords:
+  - value: Acme Industries
+    severity: high
+
+ip_ranges:
+  - value: 203.0.113.0/24
+    severity: medium
+
+# Card BINs issued by your organization
+bins:
+  - value: "457173"
+    severity: high
